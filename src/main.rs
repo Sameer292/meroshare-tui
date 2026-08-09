@@ -21,7 +21,6 @@ fn db_path() -> Result<PathBuf> {
 }
 
 fn main() -> Result<()> {
-    dotenvy::dotenv().ok();
     let base: String = env::var("BASE_URL").expect("Base Url must be set");
     if base.is_empty() {
         exit(401);
