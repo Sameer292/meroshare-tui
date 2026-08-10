@@ -45,6 +45,7 @@ pub struct App {
     rx: Receiver<Msg>,
     tx: Sender<Msg>,
     tick: Instant,
+    last_fetch: Instant,
 }
 
 pub struct FormState {
@@ -60,6 +61,7 @@ pub struct FormField {
 }
 
 const SPINNER: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+const POLL_INTERVAL: Duration = Duration::from_secs(30);
 
 impl App {
     pub fn new(db: Db, accounts: Vec<Account>) -> Self {
@@ -83,6 +85,7 @@ impl App {
             rx,
             tx,
             tick: Instant::now(),
+            last_fetch: Instant::now(),
         }
     }
 
@@ -95,10 +98,14 @@ impl App {
             self.spin = self.spin.wrapping_add(1);
             self.tick = Instant::now();
         }
+        if !self.loading && self.last_fetch.elapsed() >= POLL_INTERVAL {
+            self.start_fetch();
+        }
         self.process_events();
     }
 
     pub fn start_fetch(&mut self) {
+        self.last_fetch = Instant::now();
         self.loading = true;
         self.rows = vec![RowState::Loading; self.accounts.len()];
         let accounts = self.accounts.clone();
