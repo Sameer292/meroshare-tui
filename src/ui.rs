@@ -19,6 +19,16 @@ const WARN: Color = Color::Yellow;
 const HEADER_BG: Color = Color::Rgb(150, 110, 45);
 const TOTAL_BG: Color = Color::Rgb(150, 110, 45);
 
+const MASK: &str = "••••";
+
+fn money(app: &App, v: f64) -> String {
+    if app.hide_amounts {
+        MASK.to_string()
+    } else {
+        fmt_money(v)
+    }
+}
+
 fn fmt_money(v: f64) -> String {
     let s = format!("{:.2}", v);
     let (int, frac) = s.split_once('.').unwrap();
@@ -42,7 +52,10 @@ fn fmt_qty(v: f64) -> String {
     }
 }
 
-fn pl_span(v: f64) -> Span<'static> {
+fn pl_span(app: &App, v: f64) -> Span<'static> {
+    if app.hide_amounts {
+        return Span::styled(MASK, Style::default().fg(MUTED));
+    }
     let (color, sign) = if v >= 0.0 { (GOOD, "+") } else { (BAD, "") };
     Span::styled(
         format!("{}{}", sign, fmt_money(v)),
@@ -185,7 +198,7 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
     let (left, right) =
         if app.tab == Tab::Accounts && app.form.is_none() && app.confirm_delete.is_none() {
             (
-                " q quit  |  Tab switch  |  a add  |  d delete  |  r refresh  ",
+                " q quit  |  Tab switch  |  a add  |  d delete  |  s hide  |  r refresh  ",
                 (if app.loading {
                     format!("{} fetching...", app.spinner())
                 } else {
@@ -195,7 +208,7 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             )
         } else {
             (
-                " q quit  |  Tab switch  |  r refresh  |  h/j/k/l move  ",
+                " q quit  |  Tab switch  |  s hide  |  r refresh  |  h/j/k/l move  ",
                 (if app.loading {
                     format!("{} fetching...", app.spinner())
                 } else {
@@ -245,11 +258,15 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect) {
     let total_pl: f64 = ok_rows.iter().map(|p| p.profit_loss).sum();
 
     let pl_color = if total_pl >= 0.0 { GOOD } else { BAD };
-    let pl_text = format!(
-        "{}{}",
-        if total_pl >= 0.0 { "+" } else { "" },
-        fmt_money(total_pl)
-    );
+    let pl_text = if app.hide_amounts {
+        MASK.to_string()
+    } else {
+        format!(
+            "{}{}",
+            if total_pl >= 0.0 { "+" } else { "" },
+            fmt_money(total_pl)
+        )
+    };
     let stats = Line::from(vec![
         Span::styled("Quantity: ", Style::default().fg(MUTED)),
         Span::styled(
@@ -259,7 +276,7 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect) {
         Span::raw("    "),
         Span::styled("Prev Close: ", Style::default().fg(MUTED)),
         Span::styled(
-            fmt_money(total_prev),
+            money(app, total_prev),
             Style::default()
                 .fg(Color::White)
                 .add_modifier(Modifier::BOLD),
@@ -267,7 +284,7 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect) {
         Span::raw("    "),
         Span::styled("Last Traded: ", Style::default().fg(MUTED)),
         Span::styled(
-            fmt_money(total_last),
+            money(app, total_last),
             Style::default()
                 .fg(Color::White)
                 .add_modifier(Modifier::BOLD),
@@ -350,9 +367,9 @@ fn render_dashboard(f: &mut Frame, app: &App, area: Rect) {
                 Line::from(fmt_qty(p.total_shares))
                     .style(Style::default().fg(WARN).add_modifier(Modifier::BOLD))
                     .alignment(Alignment::Center),
-                Line::from(fmt_money(p.prev_close)).add_modifier(Modifier::BOLD),
-                Line::from(fmt_money(p.last_traded)).add_modifier(Modifier::BOLD),
-                Line::from(pl_span(p.profit_loss)).add_modifier(Modifier::BOLD),
+                Line::from(money(app, p.prev_close)).add_modifier(Modifier::BOLD),
+                Line::from(money(app, p.last_traded)).add_modifier(Modifier::BOLD),
+                Line::from(pl_span(app, p.profit_loss)).add_modifier(Modifier::BOLD),
             ],
         };
         rows.push(make_row(lines));
@@ -612,11 +629,11 @@ fn render_detail(f: &mut Frame, app: &App, idx: usize) {
                 .style(Style::default().fg(WARN).add_modifier(Modifier::BOLD)),
             Line::from(h.company.clone()),
             Line::from(fmt_qty(h.qty)).alignment(Alignment::Center),
-            Line::from(fmt_money(h.prev_close)),
-            Line::from(fmt_money(h.val_prev_close)),
-            Line::from(fmt_money(h.ltp)),
-            Line::from(fmt_money(h.val_ltp)),
-            Line::from(pl_span(pl)),
+            Line::from(money(app, h.prev_close)),
+            Line::from(money(app, h.val_prev_close)),
+            Line::from(money(app, h.ltp)),
+            Line::from(money(app, h.val_ltp)),
+            Line::from(pl_span(app, pl)),
         ]));
     }
 
@@ -640,18 +657,18 @@ fn render_detail(f: &mut Frame, app: &App, idx: usize) {
             )
             .alignment(Alignment::Center),
         Line::from(""),
-        Line::from(fmt_money(total_value_lcp)).style(
+        Line::from(money(app, total_value_lcp)).style(
             Style::default()
                 .fg(Color::Black)
                 .add_modifier(Modifier::BOLD),
         ),
         Line::from(""),
-        Line::from(fmt_money(total_value_ltp)).style(
+        Line::from(money(app, total_value_ltp)).style(
             Style::default()
                 .fg(Color::Black)
                 .add_modifier(Modifier::BOLD),
         ),
-        Line::from(pl_span(total_pl)).add_modifier(Modifier::BOLD),
+        Line::from(pl_span(app, total_pl)).add_modifier(Modifier::BOLD),
     ]));
 
     let header = make_header(vec![

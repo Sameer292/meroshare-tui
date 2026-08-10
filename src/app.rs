@@ -41,6 +41,7 @@ pub struct App {
     pub spin: u8,
     pub form: Option<FormState>,
     pub confirm_delete: Option<usize>,
+    pub hide_amounts: bool,
     rx: Receiver<Msg>,
     tx: Sender<Msg>,
     tick: Instant,
@@ -78,6 +79,7 @@ impl App {
             spin: 0,
             form: None,
             confirm_delete: None,
+            hide_amounts: false,
             rx,
             tx,
             tick: Instant::now(),
@@ -136,11 +138,12 @@ impl App {
             return;
         }
         if self.detail.is_some() {
-            if matches!(
-                key.code,
-                KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter | KeyCode::Char('h')
-            ) {
-                self.detail = None;
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter | KeyCode::Char('h') => {
+                    self.detail = None;
+                }
+                KeyCode::Char('s') => self.hide_amounts = !self.hide_amounts,
+                _ => {}
             }
             return;
         }
@@ -153,6 +156,7 @@ impl App {
         }
         match key.code {
             KeyCode::Char('q') => self.should_quit = true,
+            KeyCode::Char('s') => self.hide_amounts = !self.hide_amounts,
             KeyCode::Char('r') => self.start_fetch(),
             KeyCode::Tab => {
                 self.tab = match self.tab {
