@@ -1,9 +1,14 @@
+use std::io;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{
+    DisableMouseCapture, EnableMouseCapture, KeyCode, KeyEvent, KeyModifiers, MouseEvent,
+    MouseEventKind,
+};
+use crossterm::execute;
 
 use crate::api::{self, PortfolioSummary};
 use crate::db::{Account, Db};
@@ -35,6 +40,7 @@ pub struct App {
     pub selected: usize,
     pub accounts_selected: usize,
     pub detail: Option<usize>,
+    pub detail_selected: usize,
     pub loading: bool,
     pub should_quit: bool,
     pub message: String,
@@ -75,6 +81,7 @@ impl App {
             selected: 0,
             accounts_selected: 0,
             detail: None,
+            detail_selected: 0,
             loading: true,
             should_quit: false,
             message: String::new(),
@@ -150,6 +157,8 @@ impl App {
                     self.detail = None;
                 }
                 KeyCode::Char('s') => self.hide_amounts = !self.hide_amounts,
+                KeyCode::Down | KeyCode::Char('j') => self.move_detail_selection(1),
+                KeyCode::Up | KeyCode::Char('k') => self.move_detail_selection(-1),
                 _ => {}
             }
             return;
@@ -178,6 +187,7 @@ impl App {
                     && matches!(self.rows.get(self.selected), Some(RowState::Ok(_))) =>
             {
                 self.detail = Some(self.selected);
+                self.detail_selected = 0;
             }
             KeyCode::Char('a') if self.tab == Tab::Accounts => {
                 self.form = Some(FormState {
@@ -238,6 +248,41 @@ impl App {
         };
         let next = (*sel as i32 + delta).clamp(0, len as i32 - 1) as usize;
         *sel = next;
+    }
+
+    fn move_detail_selection(&mut self, delta: i32) {
+        let len = match self.detail.and_then(|idx| self.rows.get(idx)) {
+            Some(RowState::Ok(p)) => p.holdings.len(),
+            _ => return,
+        };
+        if len == 0 {
+            return;
+        }
+        let next = (self.detail_selected as i32 + delta).clamp(0, len as i32 - 1) as usize;
+        self.detail_selected = next;
+    }
+
+    fn on_mouse(&mut self, event: MouseEvent) {
+        if self.form.is_some() || self.confirm_delete.is_some() {
+            return;
+        }
+        match event.kind {
+            MouseEventKind::ScrollDown => {
+                if self.detail.is_some() {
+                    self.move_detail_selection(1);
+                } else {
+                    self.move_selection(1);
+                }
+            }
+            MouseEventKind::ScrollUp => {
+                if self.detail.is_some() {
+                    self.move_detail_selection(-1);
+                } else {
+                    self.move_selection(-1);
+                }
+            }
+            _ => {}
+        }
     }
 
     fn handle_confirm_key(&mut self, key: KeyEvent, idx: usize) {
@@ -305,11 +350,20 @@ impl App {
     }
 
     pub fn run(&mut self, terminal: &mut ratatui::DefaultTerminal) -> Result<()> {
+        execute!(io::stdout(), EnableMouseCapture)?;
+        let result = self.run_loop(terminal);
+        execute!(io::stdout(), DisableMouseCapture)?;
+        result
+    }
+
+    fn run_loop(&mut self, terminal: &mut ratatui::DefaultTerminal) -> Result<()> {
         loop {
             terminal.draw(|f| ui::render(f, self))?;
             if crossterm::event::poll(Duration::from_millis(50))? {
-                if let crossterm::event::Event::Key(key) = crossterm::event::read()? {
-                    self.on_key(key);
+                match crossterm::event::read()? {
+                    crossterm::event::Event::Key(key) => self.on_key(key),
+                    crossterm::event::Event::Mouse(mouse) => self.on_mouse(mouse),
+                    _ => {}
                 }
             }
             self.tick();

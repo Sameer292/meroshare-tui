@@ -593,25 +593,10 @@ fn render_form(f: &mut Frame, form: &FormState) {
 fn render_detail(f: &mut Frame, app: &App, idx: usize) {
     let area = f.area();
     let popup = centered_rect(78, 85, area);
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(ACCENT))
-        .padding(Padding::horizontal(1))
-        .title(Line::from(vec![
-            Span::styled(" Holdings: ", Style::default().fg(ACCENT)),
-            Span::styled(
-                app.accounts.get(idx).map(|a| a.name.as_str()).unwrap_or(""),
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]))
-        .title_alignment(Alignment::Left);
-    let inner = block.inner(popup);
 
+    let name = app.accounts.get(idx).map(|a| a.name.as_str()).unwrap_or("");
+    let title = format!(" Holdings: {} ", name);
     f.render_widget(Clear, popup);
-    f.render_widget(block, popup);
 
     let summary = match app.rows.get(idx) {
         Some(RowState::Ok(p)) => p.clone(),
@@ -687,7 +672,7 @@ fn render_detail(f: &mut Frame, app: &App, idx: usize) {
         Line::from("P/L").add_modifier(Modifier::BOLD),
     ]);
 
-    let widths = [
+    let widths = vec![
         Constraint::Length(8),
         Constraint::Length(8),
         Constraint::Min(18),
@@ -699,9 +684,14 @@ fn render_detail(f: &mut Frame, app: &App, idx: usize) {
         Constraint::Length(10),
     ];
 
-    f.render_widget(
-        Table::new(rows, widths).header(header).column_spacing(2),
-        inner,
+    render_selectable_table(
+        f,
+        popup,
+        &title,
+        rows,
+        header,
+        widths,
+        app.detail_selected,
     );
 }
 
